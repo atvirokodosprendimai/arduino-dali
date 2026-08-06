@@ -109,7 +109,10 @@ int DaliClass::sendCmdWait(byte address, DaliCmd command, byte addr_type, byte t
   int result;
 
   while (sendCount) {
-    result = sendRawWait(prepareCmd(message, address, command, addr_type, 1), 2, timeout);
+    /* 16 bits, not 2. prepareCmd builds a two-BYTE frame; passing the byte
+     * count made sendRaw reject it outright (2 % 8 != 0 -> DALI_INVALID_PARAMETER),
+     * so every sendCmdWait returned -4 without touching the bus. */
+    result = sendRawWait(prepareCmd(message, address, command, addr_type, 1), 16, timeout);
     if (result != DALI_RX_EMPTY) return result;
     sendCount--;
   }
@@ -134,7 +137,7 @@ daliReturnValue DaliClass::sendSpecialCmd(DaliSpecialCmd cmd, byte value) {
 
 int DaliClass::sendSpecialCmdWait(word command, byte value, byte timeout) {
   byte message[2];
-  return sendRawWait(prepareSpecialCmd(message, command, value), 16);
+  return sendRawWait(prepareSpecialCmd(message, command, value), 16, timeout);
 }
 
 #ifndef DALI_NO_COMMISSIONING
