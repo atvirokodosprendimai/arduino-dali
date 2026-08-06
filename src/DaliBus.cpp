@@ -73,6 +73,7 @@ void DaliBusClass::begin(byte tx_pin, byte rx_pin, bool tx_active_low, bool rx_a
 
   // init bus state
   busState = IDLE;
+  txIsResponse = 0;
 
   // TX pin setup
   pinMode(txPin, OUTPUT);
@@ -127,10 +128,23 @@ daliReturnValue DaliBusClass::sendRaw(const byte * message, uint8_t bits) {
 
   txLength = bits;
   txCollision = 0;
+  txIsResponse = 0;
   rxMessage = DALI_RX_EMPTY;
   rxLength = 0;
 
   // initiate transmission
+  busState = TX_START_1ST;
+  return DALI_SENT;
+}
+
+daliReturnValue DaliBusClass::sendResponse(byte value) {
+  if (busState != IDLE) return DALI_BUSY;
+
+  txMessage[0] = value;
+  txLength = 8;                 // backward frames are one byte
+  txCollision = 0;
+  txIsResponse = 1;             // shortens the pre-transmission wait, see timerISR
+
   busState = TX_START_1ST;
   return DALI_SENT;
 }
@@ -175,7 +189,17 @@ void DaliBusClass::timerISR() {
   // timer state machine
   switch (busState) {
     case TX_START_1ST: // initiate transmission by setting bus low (1st half)
-      if (busIdleCount >= 26) { // wait at least 9.17ms (22 TE) settling time before sending (little more for TCI compatibility)
+      /* One timer tick is one TE (2398Hz -> 417us), and busIdleCount is reset
+       * by every edge, so it counts TE since the last transition.
+       *
+       * A forward frame waits out the full settling time, 22 TE plus a little
+       * for TCI compatibility. A backward frame is a reply and obeys the
+       * opposite constraint: it must START 7..22 TE after the forward frame's
+       * stop condition, which itself ends 2-3 TE after that frame's last edge.
+       * That puts the legal window at roughly 9..24 ticks here; 12 sits inside
+       * it with margin at both ends. Waiting 26 would answer too late and a
+       * compliant master would have stopped listening. */
+      if (busIdleCount >= (txIsResponse ? 12 : 26)) {
         setBusLevel(LOW);
         busState = TX_START_2ND;
       }
@@ -213,9 +237,11 @@ void DaliBusClass::timerISR() {
       break;
     case TX_STOP: // remaining stop half-bits
       if (busIdleCount >= 4) {
-        busState = WAIT_RX;
+        /* Nothing answers a backward frame, so a slave goes straight back to
+         * idle instead of holding the bus for a 22 TE response window. */
+        busState = txIsResponse ? IDLE : WAIT_RX;
         busIdleCount = 0;
-      }   
+      }
       break;
     case WAIT_RX: // wait 9.17ms (22 TE) for a response
       if (busIdleCount > 22)
@@ -243,14 +269,18 @@ void DaliBusClass::timerISR() {
               rxCommand = (rxCommand >> 1) & 0xFFFF;
               rxCommand |= temp;
             }
-            uint8_t offset = bitlen - 8;
+            /* offset must be signed and the guard must accept 0: the final
+             * byte of every frame sits at shift 0, so an unsigned "!= 0" test
+             * dropped it. A 16-bit frame delivered only the address byte and
+             * left the opcode uninitialised. */
+            int8_t offset = bitlen - 8;
             data[0] = (rxCommand >> offset) & 0xFF;
             offset -= 8;
-            if(offset != 0) {
+            if(offset >= 0) {
               data[1] = (rxCommand >> offset) & 0xFF;
               offset -= 8;
             }
-            if(offset != 0) {
+            if(offset >= 0) {
               data[2] = (rxCommand >> offset) & 0xFF;
               offset -= 8;
             }
