@@ -29,12 +29,28 @@
 
 #include "Arduino.h"
 
-#include "TimerInterrupt_Generic.h"
+/* On AVR, TimerInterrupt_Generic defines the ITimerN objects and their ISR()
+ * handlers in the header, so including it from here -- which Dali.h pulls into
+ * every translation unit -- gives duplicate symbols at link time. There it is
+ * included by DaliBus.cpp alone. The other architectures get class
+ * declarations only, and this file relies on the header's transitive includes
+ * (e.g. the ESP32 GPIO struct used by fastRead/fastWrite below). */
+#if !defined(ARDUINO_ARCH_AVR)
+  #include "TimerInterrupt_Generic.h"
+#endif
 
 #ifndef DALI_NO_TIMER
   #ifndef DALI_TIMER
-    #warning DALI_TIMER not set; default will be set (0)
-    #define DALI_TIMER 0
+    /* AVR has no spare timer 0 (millis()/micros()/delay() own it), so the
+     * default cannot be a flat 0 like on the other architectures. Timer 1
+     * exists on every supported AVR, unlike timers 2 and 3. */
+    #if defined(ARDUINO_ARCH_AVR)
+      #warning DALI_TIMER not set; default will be set (1)
+      #define DALI_TIMER 1
+    #else
+      #warning DALI_TIMER not set; default will be set (0)
+      #define DALI_TIMER 0
+    #endif
   #endif
   #ifdef ARDUINO_ARCH_RP2040
   #if DALI_TIMER < 0 || DALI_TIMER > 3
