@@ -120,6 +120,14 @@ class DaliBusClass {
     void begin(byte tx_pin, byte rx_pin, bool tx_active_low, bool rx_active_low);
     daliReturnValue sendRaw(const byte * message, uint8_t bits);
 
+    /** Send a backward frame -- the one-byte reply a slave owes a master.
+      *
+      * Unlike sendRaw() this starts transmitting inside the DALI answer window
+      * rather than after the full settling time, so it must be called from the
+      * receive callback (i.e. still in interrupt context) and not from loop().
+      * Returns DALI_SENT, or DALI_BUSY if the bus is not idle. */
+    daliReturnValue sendResponse(byte value);
+
     int getLastResponse();
 
 #ifdef ARDUINO_ARCH_ESP32
@@ -167,6 +175,7 @@ class DaliBusClass {
     volatile byte txPos;
     volatile byte txBusLevel;
     volatile byte txCollision;
+    volatile byte txIsResponse;   /**< current transmission is a backward frame */
 
     volatile unsigned long rxLastChange;
     volatile byte rxMessage;
