@@ -59,7 +59,19 @@ class DaliClass {
       * driven active-low, meaning with the µC tx pin being low the DALI bus will be high (idle). For transmission
       * the µC pin will be set high, which will pull the DALI voltage low. This behaviour
       * is used by most DALI hardware interfaces. The same logic applies to the rx pin. */
-    void begin(byte tx_pin, byte rx_pin, bool active_low = true);
+    void begin(byte tx_pin, byte rx_pin, bool active_low = true) { begin(tx_pin, rx_pin, active_low, active_low); }
+
+    /** Start the DALI bus with independent tx and rx polarity
+      * @param tx_pin         Pin to use for transmission
+      * @param rx_pin         Pin to use for reception. Must support Pin Change Interrupt.
+      * @param tx_active_low  set to false if a high tx pin drives the bus high
+      * @param rx_active_low  set to false if an idle (high) bus reads high on the rx pin
+      *
+      * Some interfaces invert only one direction, so the single-flag overload above always leaves one
+      * side backwards. A MOSFET shorting the bus is inverting (tx_active_low = true: the pin idles low,
+      * going high pulls the bus down), while a plain resistive divider is not (rx_active_low = false:
+      * an idle 16V bus reads high). That combination needs begin(tx, rx, true, false). */
+    void begin(byte tx_pin, byte rx_pin, bool tx_active_low, bool rx_active_low);
 
     /** Send a direct arc level command
       * @param  address    destination address

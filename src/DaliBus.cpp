@@ -65,10 +65,11 @@ void IRAM_ATTR DaliBus_wrapper_pinchangeISR() { DaliBus.pinchangeISR(); }
 void DaliBus_wrapper_pinchangeISR() { DaliBus.pinchangeISR(); }
 #endif
 
-void DaliBusClass::begin(byte tx_pin, byte rx_pin, bool active_low) {
+void DaliBusClass::begin(byte tx_pin, byte rx_pin, bool tx_active_low, bool rx_active_low) {
   txPin = tx_pin;
   rxPin = rx_pin;
-  activeLow = active_low;
+  txActiveLow = tx_active_low;
+  rxActiveLow = rx_active_low;
 
   // init bus state
   busState = IDLE;
