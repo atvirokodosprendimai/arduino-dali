@@ -7,3 +7,4 @@
 - 2026-08-07 `a1890a6` Merge branch 'task/changelog-sync-2'
 - 2026-08-07 `40e9553` Merge branch 'task/fix-sendcmdwait'
 - 2026-08-07 `74e0415` docs: sync changelog
+- 2026-08-07 `ad14bac` Merge branch 'task/readme'
