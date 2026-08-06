@@ -29,12 +29,28 @@
 
 #include "Arduino.h"
 
-#include "TimerInterrupt_Generic.h"
+/* On AVR, TimerInterrupt_Generic defines the ITimerN objects and their ISR()
+ * handlers in the header, so including it from here -- which Dali.h pulls into
+ * every translation unit -- gives duplicate symbols at link time. There it is
+ * included by DaliBus.cpp alone. The other architectures get class
+ * declarations only, and this file relies on the header's transitive includes
+ * (e.g. the ESP32 GPIO struct used by fastRead/fastWrite below). */
+#if !defined(ARDUINO_ARCH_AVR)
+  #include "TimerInterrupt_Generic.h"
+#endif
 
 #ifndef DALI_NO_TIMER
   #ifndef DALI_TIMER
-    #warning DALI_TIMER not set; default will be set (0)
-    #define DALI_TIMER 0
+    /* AVR has no spare timer 0 (millis()/micros()/delay() own it), so the
+     * default cannot be a flat 0 like on the other architectures. Timer 1
+     * exists on every supported AVR, unlike timers 2 and 3. */
+    #if defined(ARDUINO_ARCH_AVR)
+      #warning DALI_TIMER not set; default will be set (1)
+      #define DALI_TIMER 1
+    #else
+      #warning DALI_TIMER not set; default will be set (0)
+      #define DALI_TIMER 0
+    #endif
   #endif
   #ifdef ARDUINO_ARCH_RP2040
   #if DALI_TIMER < 0 || DALI_TIMER > 3
@@ -61,14 +77,14 @@ const unsigned long DALI_TE_MAX = (120 * DALI_TE) / 100;                 // 500u
 #define isDeltaWithinTE(delta) (DALI_TE_MIN <= delta && delta <= DALI_TE_MAX)
 #define isDeltaWithin2TE(delta) (2*DALI_TE_MIN <= delta && delta <= 2*DALI_TE_MAX)
 #if defined(ARDUINO_ARCH_RP2040)
-  #define getBusLevel (activeLow ? !gpio_get(rxPin) : gpio_get(rxPin))
-  #define setBusLevel(level) gpio_put(txPin, (activeLow ? !level : level)); txBusLevel = level;
+  #define getBusLevel (rxActiveLow ? !gpio_get(rxPin) : gpio_get(rxPin))
+  #define setBusLevel(level) gpio_put(txPin, (txActiveLow ? !level : level)); txBusLevel = level;
 #elif defined(ARDUINO_ARCH_ESP32)
-  #define getBusLevel (activeLow ? !(DaliBus.fastRead(rxPin)) : DaliBus.fastRead(rxPin))
-  #define setBusLevel(level) DaliBus.fastWrite(txPin, (activeLow ? !level : level)); txBusLevel = level;
+  #define getBusLevel (rxActiveLow ? !(DaliBus.fastRead(rxPin)) : DaliBus.fastRead(rxPin))
+  #define setBusLevel(level) DaliBus.fastWrite(txPin, (txActiveLow ? !level : level)); txBusLevel = level;
 #elif defined(ARDUINO_ARCH_AVR) || defined(ARDUINO_ARCH_STM32)
-  #define getBusLevel (activeLow ? !digitalRead(rxPin) : digitalRead(rxPin))
-  #define setBusLevel(level) digitalWrite(txPin, (activeLow ? !level : level)); txBusLevel = level;
+  #define getBusLevel (rxActiveLow ? !digitalRead(rxPin) : digitalRead(rxPin))
+  #define setBusLevel(level) digitalWrite(txPin, (txActiveLow ? !level : level)); txBusLevel = level;
 #else
   #error not supported Hardware
 #endif
@@ -96,7 +112,12 @@ typedef void (*EventHandlerErrorFuncPtr)(daliReturnValue errorCode);
 
 class DaliBusClass {
   public:
-    void begin(byte tx_pin, byte rx_pin, bool active_low = true);
+    /** Same polarity for both directions -- the usual case. */
+    void begin(byte tx_pin, byte rx_pin, bool active_low = true) { begin(tx_pin, rx_pin, active_low, active_low); }
+    /** Independent tx/rx polarity, for interface hardware that inverts only
+     *  one direction (e.g. an inverting driver with a non-inverting receiver,
+     *  where a single flag always leaves one side backwards). */
+    void begin(byte tx_pin, byte rx_pin, bool tx_active_low, bool rx_active_low);
     daliReturnValue sendRaw(const byte * message, uint8_t bits);
 
     int getLastResponse();
@@ -130,7 +151,7 @@ class DaliBusClass {
 
   protected:
     byte txPin, rxPin;
-    bool activeLow;
+    bool txActiveLow, rxActiveLow;
     byte txMessage[4];
     uint8_t txLength;
 

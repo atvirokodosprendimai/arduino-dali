@@ -18,19 +18,32 @@
 #include "DaliBus.h"
 
 #ifdef DALI_TIMER
+#if defined(ARDUINO_ARCH_AVR)
+  /* TimerInterrupt_Generic instantiates ITimerN and its ISR only when the
+   * matching USE_TIMER_n is true, and it defaults them all to false. Opt in to
+   * the one DALI_TIMER selected -- this is a preprocessor gate, so it has to
+   * happen before the include. */
+  #if DALI_TIMER==1
+    #define USE_TIMER_1 true
+  #elif DALI_TIMER==2
+    #define USE_TIMER_2 true
+  #elif DALI_TIMER==3
+    #define USE_TIMER_3 true
+  #endif
+#endif
+#include "TimerInterrupt_Generic.h"
+
 #if defined(ARDUINO_ARCH_RP2040)
 RPI_PICO_Timer timer2(DALI_TIMER);
-void __isr __time_critical_func(DaliBus_wrapper_pinchangeISR)() { DaliBus.pinchangeISR(); }
 #elif defined(ARDUINO_ARCH_ESP32)
 ESP32Timer timer2(DALI_TIMER);
-void IRAM_ATTR DaliBus_wrapper_pinchangeISR() { DaliBus.pinchangeISR(); }
 #elif defined(ARDUINO_ARCH_ESP8266)
 ESP8266Timer timer2(DALI_TIMER);
-void IRAM_ATTR DaliBus_wrapper_pinchangeISR() { DaliBus.pinchangeISR(); }
 #elif defined(ARDUINO_ARCH_STM32)
 STM32Timer timer2(DALI_TIMER);
-void DaliBus_wrapper_pinchangeISR() { DaliBus.pinchangeISR(); }
 #elif defined(ARDUINO_ARCH_AVR)
+  /* AVR has no timer wrapper class; the library pre-instantiates one global
+   * object per enabled timer, so alias the selected one. */
   #if DALI_TIMER==1
   #define timer2 ITimer1
   #elif DALI_TIMER==2
@@ -38,14 +51,25 @@ void DaliBus_wrapper_pinchangeISR() { DaliBus.pinchangeISR(); }
   #else
   #define timer2 ITimer3
   #endif
-void DaliBus_wrapper_pinchangeISR() { DaliBus.pinchangeISR(); }
 #endif
 #endif
 
-void DaliBusClass::begin(byte tx_pin, byte rx_pin, bool active_low) {
+/* The pin-change wrapper is required in every configuration, DALI_NO_TIMER
+ * included -- there the sketch drives timerISR() itself but rx still needs the
+ * edge interrupt. Keep it outside the DALI_TIMER guard. */
+#if defined(ARDUINO_ARCH_RP2040)
+void __isr __time_critical_func(DaliBus_wrapper_pinchangeISR)() { DaliBus.pinchangeISR(); }
+#elif defined(ARDUINO_ARCH_ESP32) || defined(ARDUINO_ARCH_ESP8266)
+void IRAM_ATTR DaliBus_wrapper_pinchangeISR() { DaliBus.pinchangeISR(); }
+#else
+void DaliBus_wrapper_pinchangeISR() { DaliBus.pinchangeISR(); }
+#endif
+
+void DaliBusClass::begin(byte tx_pin, byte rx_pin, bool tx_active_low, bool rx_active_low) {
   txPin = tx_pin;
   rxPin = rx_pin;
-  activeLow = active_low;
+  txActiveLow = tx_active_low;
+  rxActiveLow = rx_active_low;
 
   // init bus state
   busState = IDLE;
@@ -72,7 +96,9 @@ void DaliBusClass::begin(byte tx_pin, byte rx_pin, bool active_low) {
   });
   #elif defined(ARDUINO_ARCH_AVR)
     timer2.init();
-    timer2.attachInterrupt(2398, +[](unsigned int outputPin) {
+    /* AVR's attachInterrupt takes a plain void(*)() -- the arg-carrying
+     * overload needs an explicit params value, so no parameter here. */
+    timer2.attachInterrupt(2398, +[]() {
       DaliBus.timerISR();
     });
   #elif defined(ARDUINO_ARCH_STM32)
