@@ -5,3 +5,4 @@
 - 2026-08-07 `33ff27d` Merge branch 'task/scanner-docs'
 - 2026-08-07 `85c4eee` Merge branch 'task/dali-slave'
 - 2026-08-07 `a1890a6` Merge branch 'task/changelog-sync-2'
+- 2026-08-07 `40e9553` Merge branch 'task/fix-sendcmdwait'
