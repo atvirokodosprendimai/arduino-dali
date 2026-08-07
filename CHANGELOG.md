@@ -8,3 +8,4 @@
 - 2026-08-07 `40e9553` Merge branch 'task/fix-sendcmdwait'
 - 2026-08-07 `74e0415` docs: sync changelog
 - 2026-08-07 `ad14bac` Merge branch 'task/readme'
+- 2026-08-07 `c81202a` Merge branch 'task/readme-org'
