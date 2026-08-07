@@ -1,4 +1,4 @@
-[![PlatformIO Registry](https://badges.registry.platformio.org/packages/thewhobox/library/Dali.svg)](https://registry.platformio.org/libraries/thewhobox/Dali) [![CodeFactor](https://www.codefactor.io/repository/github/thewhobox/arduino-dali/badge)](https://www.codefactor.io/repository/github/thewhobox/arduino-dali)
+[![CodeFactor](https://www.codefactor.io/repository/github/atvirokodosprendimai/arduino-dali/badge)](https://www.codefactor.io/repository/github/atvirokodosprendimai/arduino-dali)
 
 # Arduino DALI — a non-blocking DALI library for Arduino
 
@@ -16,7 +16,10 @@ answer as DALI control gear yourself.
 - **Send and receive.** Commands, direct arc levels, special commands, raw frames, and replies.
 - **Commissioning.** Automatic short-address assignment via the DALI binary search.
 - **Slave mode.** Answer as control gear, including memory-bank reads.
-- **Independent tx/rx polarity**, for interface hardware that inverts only one direction.
+- **Works with any interface module** — optocoupler pairs, common-ground designs built
+  from a resistive divider and a MOSFET, or off-the-shelf transceivers. Transmit and
+  receive polarity are set independently, so modules that invert only one direction work
+  too.
 - **Bring your own timer** with `DALI_NO_TIMER` if the hardware timers are already spoken for.
 
 Jump to: [Install](#install) · [Wiring](#wiring-and-polarity) · [Quick start](#quick-start) ·
@@ -46,14 +49,15 @@ why the AVR default is 1 rather than 0.
 **Arduino IDE** — Library Manager, or clone into your `libraries/` folder:
 
 ```bash
-git clone https://github.com/thewhobox/arduino-dali.git ~/Documents/Arduino/libraries/arduino-dali
+git clone https://github.com/atvirokodosprendimai/arduino-dali.git ~/Documents/Arduino/libraries/arduino-dali
 ```
 
-**PlatformIO** — in `platformio.ini`:
+**PlatformIO** — in `platformio.ini`. This fork is not published to the PlatformIO
+registry, so point `lib_deps` at the repository directly:
 
 ```ini
 lib_deps =
-    thewhobox/Dali
+    https://github.com/atvirokodosprendimai/arduino-dali.git
     khoih-prog/TimerInterrupt_Generic@^1.13.0
 ```
 
@@ -74,12 +78,26 @@ Two pins:
 | `tx_pin` | any output |
 | `rx_pin` | **must support interrupts** — on an Uno that is pin 2 or 3 only |
 
-Interface circuits differ in whether they invert the signal, and many invert only one
-direction. `begin()` therefore takes the two polarities separately:
+**Any interface module works.** The library makes no assumption about how your hardware
+is built — galvanically isolated optocoupler pairs, common-ground designs using a
+resistive divider for receive and a MOSFET for transmit, or a commercial DALI transceiver
+IC are all fine. What differs between them is only whether each direction inverts the
+signal, and `begin()` takes those two polarities separately:
 
 ```cpp
 Dali.begin(tx_pin, rx_pin, tx_active_low, rx_active_low);
 ```
+
+Common modules:
+
+| Module | Call |
+|---|---|
+| Optocoupler pair, both directions inverting — the classic isolated interface | `Dali.begin(tx, rx, true, true)` or the 3-argument `Dali.begin(tx, rx, true)` |
+| Common ground: resistive divider on rx, MOSFET shorting the bus on tx | `Dali.begin(tx, rx, true, false)` |
+| Transceiver presenting non-inverted logic in both directions | `Dali.begin(tx, rx, false, false)` |
+| Anything mixed | set each flag from the table below |
+
+Work out your own from the two stages independently:
 
 | Your hardware | Setting |
 |---|---|
@@ -397,12 +415,20 @@ further.
 ## Documentation
 
 - [scanner.md](scanner.md) — scanning, discovery and commissioning, with full sketches
-- [API docs](https://hubsif.github.io/arduino-dali/) — Doxygen, generated from the headers
 - [examples/](examples/) — blink, receive, and slave
+- [Upstream API docs](https://hubsif.github.io/arduino-dali/) — Doxygen from hubsif's
+  original; predates this fork, so it does not cover the four-argument `begin()`,
+  `sendResponse()` or the DT8 commands. Regenerate locally with the included `Doxyfile`
+  for current output.
 
 ## About this fork
 
-Enhancements over [hubsif/arduino-dali](https://github.com/hubsif/arduino-dali):
+Lineage: [hubsif/arduino-dali](https://github.com/hubsif/arduino-dali) →
+[thewhobox/arduino-dali](https://github.com/thewhobox/arduino-dali) →
+[atvirokodosprendimai/arduino-dali](https://github.com/atvirokodosprendimai/arduino-dali)
+(this repository).
+
+From thewhobox:
 
 - Build-time configuration defines (see [Configuration](#configuration))
 - RP2040, ESP32, ESP8266, AVR and STM32 support
@@ -411,12 +437,21 @@ Enhancements over [hubsif/arduino-dali](https://github.com/hubsif/arduino-dali):
 - DT8 colour-control commands (`DaliCmdExtendedDT8`)
 - Receiving DALI commands, plus an activity callback for status LEDs
 - Macro-based bus level access to keep ISR time down
-- Independent tx/rx polarity, backward-frame transmission for slave use, and fixes to the
-  AVR build, the receive callback and `sendCmdWait`
+
+Added here:
+
+- Independent tx/rx polarity, for interfaces that invert only one direction
+- `DaliBus.sendResponse()` — backward frames, so the library can answer as control gear
+- Fixed the AVR build, which failed in every configuration
+- Fixed the receive callback dropping the last byte of every frame
+- Fixed `sendCmdWait` passing a byte count where bits were expected, which made every
+  query return `-4`
+- [scanner.md](scanner.md), the slave example, and this README
 
 ## Credits and license
 
-Originally by [hubsif](https://github.com/hubsif/arduino-dali), forked and extended by
-[thewhobox](https://github.com/thewhobox/arduino-dali).
+Originally by [hubsif](https://github.com/hubsif/arduino-dali), extended by
+[thewhobox](https://github.com/thewhobox/arduino-dali), maintained in this fork by
+[atvirokodosprendimai](https://github.com/atvirokodosprendimai).
 
 See [LICENSE](LICENSE).
