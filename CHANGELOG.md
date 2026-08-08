@@ -9,3 +9,4 @@
 - 2026-08-07 `74e0415` docs: sync changelog
 - 2026-08-07 `ad14bac` Merge branch 'task/readme'
 - 2026-08-07 `c81202a` Merge branch 'task/readme-org'
+- 2026-08-08 `c0b60c4` Merge branch 'task/claude-md'
